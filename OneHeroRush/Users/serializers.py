@@ -3,8 +3,16 @@ from django.contrib.auth import authenticate
 from .models import User  # Импорт твоей модели (username UNIQUE как steam_id, gold=0 default для оффлайн-фарма)
 
 class LoginSerializer(serializers.Serializer): 
-    username = serializers.CharField(max_length=50, required=True)
-    password = serializers.CharField(required=True, write_only=True) 
+    username = serializers.CharField(
+        max_length=50, 
+        required=True,
+        help_text="Steam ID или ник для логина в чат/ЛС/клановый (нормализуется lower/strip для уникальности в друзьях/blacklist)"
+    )  # Авто-input в Swagger: text field с placeholder
+    password = serializers.CharField(
+        required=True, 
+        write_only=True,
+        help_text="Пароль (хэш bcrypt; не в ответе для security — anti-brute-force на аккаунты с MMR/клановым рангом)"
+    )  # Input: password field (masked)
 
     def validate(self, data):
         username = data.get('username').lower().strip()  

@@ -3,12 +3,29 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 from .serializers import LoginSerializer, UserPublicSerializer
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = []  # Уже глобально в settings; здесь override если нужно
+
+    @swagger_auto_schema(  # Декоратор: input fields с descriptions/examples, responses для TZ (token + gold для HUD/оффлайн-фарма)
+        request_body=LoginSerializer,  # Auto-fields: username (text, required, max_length=50), password (masked, write_only)
+        responses={
+            200: UserPublicSerializer(many=False),  # Response schema: {"token": "...", "user": {"gold": 1000, ...}} для HUD справа сверху
+            400: openapi.Response('Validation error', examples={'application/json': {'username': ['Required.']}}),
+            401: openapi.Response('Invalid credentials', examples={'application/json': {'detail': 'Invalid username or password.'}}),
+            403: openapi.Response('Inactive account', examples={'application/json': {'detail': 'Account is inactive.'}}),
+        },
+        operation_description="Авторизация по username (steam_id/ник для чата ЛС/кланового) + password (bcrypt хэш). Throttling 5/min anon (Redis). Успех: token для headers (e.g., /api/clans/join/ пассивок +статы), +gold/diamonds/souls/keys для HUD/квестов 'открыть сундук 30 раз' за 150 diamonds.",
+        examples={'application/json': {  # Pre-fill в "Try it out" UI
+            'summary': 'Пример запроса',
+            'value': {'username': 'pudge_fan', 'password': 'pass123'}  # TZ: pudge_fan -> gold=1000 для теста рулетки 6-12 souls/keys/diamonds
+        }}
+    )
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
