@@ -12,10 +12,10 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = []  # Уже глобально в settings; здесь override если нужно
 
-    @swagger_auto_schema(  # Декоратор: input fields с descriptions/examples, responses для TZ (token + gold для HUD/оффлайн-фарма)
-        request_body=LoginSerializer,  # Auto-fields: username (text, required, max_length=50), password (masked, write_only)
+    @swagger_auto_schema(  
+        request_body=LoginSerializer,
         responses={
-            200: UserPublicSerializer(many=False),  # Response schema: {"token": "...", "user": {"gold": 1000, ...}} для HUD справа сверху
+            200: UserPublicSerializer(many=False),
             400: openapi.Response('Validation error', examples={'application/json': {'username': ['Required.']}}),
             401: openapi.Response('Invalid credentials', examples={'application/json': {'detail': 'Invalid username or password.'}}),
             403: openapi.Response('Inactive account', examples={'application/json': {'detail': 'Account is inactive.'}}),
