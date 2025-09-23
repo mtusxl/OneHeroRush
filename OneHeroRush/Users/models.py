@@ -28,10 +28,20 @@ class User(AbstractBaseUser, PermissionsMixin):
     souls = models.IntegerField(default=0)
     keys = models.IntegerField(default=0)
 
+    # Рейтинг (MMR)
+    mmr = models.IntegerField(default=0)
+
     # Служебные поля
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=timezone.now)
+    max_heroes = models.PositiveIntegerField(default=3)  # Increase via /shop/redeem donate, no DB hit on every query
+    purchased_heroes = models.JSONField(default=list)  # ['Pudge', 'Necrophos', ...] для donate unlock, fast contains check
+
+    class Meta:
+        indexes = [models.Index(fields=['max_heroes']),
+                   models.Index(fields=['mmr'])]
+        
 
     objects = UserManager()
 

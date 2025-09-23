@@ -21,16 +21,16 @@ class LoginView(APIView):
             403: openapi.Response('Inactive account', examples={'application/json': {'detail': 'Account is inactive.'}}),
         },
         operation_description="Авторизация по username (steam_id/ник для чата ЛС/кланового) + password (bcrypt хэш). Throttling 5/min anon (Redis). Успех: token для headers (e.g., /api/clans/join/ пассивок +статы), +gold/diamonds/souls/keys для HUD/квестов 'открыть сундук 30 раз' за 150 diamonds.",
-        examples={'application/json': {  # Pre-fill в "Try it out" UI
+        examples={'application/json': { 
             'summary': 'Пример запроса',
-            'value': {'username': 'pudge_fan', 'password': 'pass123'}  # TZ: pudge_fan -> gold=1000 для теста рулетки 6-12 souls/keys/diamonds
+            'value': {'username': 'pudge_fan', 'password': 'pass123'}  
         }}
     )
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)  # {"username": ["This field is required."]}
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST) 
 
         username = serializer.validated_data['username']
         password = serializer.validated_data['password']
