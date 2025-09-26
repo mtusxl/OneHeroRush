@@ -1,0 +1,22 @@
+# @shared_task
+# def calculate_offline_farm(user_id):
+#     '''
+#     Асинхронно считает оффлайн-фарм (gold/keys по времени AFK, онлайн > оффлайн бонус). Вызывается при логине/GET progress, добавляет в валюту.
+#     '''
+#     user = User.objects.get(id=user_id)
+#     progress = user.progress
+#     with transaction.atomic():
+#         time_offline = timezone.now() - progress.last_online
+#         hours = time_offline.total_seconds() / 3600
+#         gold_rate = 50  # Оффлайн, онлайн в реал-time +50% (в progress calc)
+#         keys_rate = 0.5
+#         gold = int(hours * gold_rate)
+#         keys = int(hours * keys_rate)
+#         user.gold += gold
+#         user.keys += keys
+#         progress.last_online = timezone.now()
+#         progress.save(update_fields=['last_online'])
+#         user.save(update_fields=['gold', 'keys'])
+#     # Уведомление, если >0
+#     if gold or keys:
+#         send_mail_notification.delay(user_id, f"Оффлайн-фарм: +{gold} gold, +{keys} keys")
