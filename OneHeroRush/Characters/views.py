@@ -10,7 +10,7 @@ from django.db import transaction
 from django.core.exceptions import PermissionDenied
 from .models import Character
 from .serializers import CharacterSerializer, CreateCharacterSerializer, SelectCharacterSerializer
-from .tasks import recalculate_mmr, update_clan_rank, send_mail_notification
+# from common.tasks import recalculate_mmr, update_clan_rank, send_mail_notification
 
 class CharacterThrottle(UserRateThrottle):
     rate = '10/min'
@@ -31,23 +31,23 @@ class CharacterViewSet(CreateModelMixin, viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return Character.objects.filter(user=self.request.user).prefetch_related('items').order_by('-level')
 
-    def perform_create(self, serializer):
-        '''
-        Кастомное создание героя: проверки лимита/доната, сохранение с user, уведомление, асинхронный MMR/клан.
-        '''
-        with transaction.atomic():
-            user = self.request.user
-            if user.characters.count() >= user.max_heroes:
-                raise PermissionDenied("Лимит героев достигнут; увеличьте через донат")
-            hero_name = serializer.validated_data['hero_name']
-            donate_heroes = ['Pudge', 'Necrophos', 'Juggernaut', 'Phantom Assassin', 'Lifestealer', 'Rubick', 'Ursa', 'Axe', 'Shadow Fiend', 'Zeus']
-            if hero_name in donate_heroes and hero_name not in user.purchased_heroes:
-                raise PermissionDenied("Герой требует покупки через донат")
-            instance = serializer.save(user=user, is_active=False)
-            send_mail_notification.delay(user.id, f"Создан герой {hero_name} с бонусом {instance.race_bonus}")
-        recalculate_mmr.delay(user.id)
-        if user.clan:
-            update_clan_rank.delay(user.clan.id)
+    # def perform_create(self, serializer):
+    #     '''
+    #     Кастомное создание героя: проверки лимита/доната, сохранение с user, уведомление, асинхронный MMR/клан.
+    #     '''
+    #     with transaction.atomic():
+    #         user = self.request.user
+    #         if user.characters.count() >= user.max_heroes:
+    #             raise PermissionDenied("Лимит героев достигнут; увеличьте через донат")
+    #         hero_name = serializer.validated_data['hero_name']
+    #         donate_heroes = ['Pudge', 'Necrophos', 'Juggernaut', 'Phantom Assassin', 'Lifestealer', 'Rubick', 'Ursa', 'Axe', 'Shadow Fiend', 'Zeus']
+    #         if hero_name in donate_heroes and hero_name not in user.purchased_heroes:
+    #             raise PermissionDenied("Герой требует покупки через донат")
+    #         instance = serializer.save(user=user, is_active=False)
+    #         send_mail_notification.delay(user.id, f"Создан герой {hero_name} с бонусом {instance.race_bonus}")
+    #     recalculate_mmr.delay(user.id)
+    #     if user.clan:
+    #         update_clan_rank.delay(user.clan.id)
 
     @method_decorator(cache_page(60))
     def list(self, request, *args, **kwargs):
@@ -70,7 +70,7 @@ def select_character(request):
             char = Character.objects.get(id=serializer.validated_data['character_id'], user=request.user)
             char.is_active = True
             char.save()
-            recalculate_mmr.delay(request.user.id)
-            send_mail_notification.delay(request.user.id, f"Выбрали {char.hero_name} - бонус {char.race_bonus}")
+            # recalculate_mmr.delay(request.user.id)
+            # send_mail_notification.delay(request.user.id, f"Выбрали {char.hero_name} - бонус {char.race_bonus}")
         return Response({'message': 'Character selected'}, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

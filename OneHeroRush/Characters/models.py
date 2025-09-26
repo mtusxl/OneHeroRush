@@ -2,7 +2,7 @@ from random import uniform
 from django.db import models
 from django.contrib.postgres.fields import JSONField
 from django.contrib.auth import get_user_model
-#from .tasks import send_mail_notification
+# from common.tasks import send_mail_notification
 
 User = get_user_model()  # Кастом User с steam_id как username
 
@@ -117,7 +117,7 @@ class Character(models.Model):
         self.level += 1  # Call in /progress/update after wave, but here for evolution check
         if self.level % 10 == 0:  # N=10 example из ТЗ "за каждый N уровень", configurable via const or field for patches
             self.stats = {k: round(v * 1.1) for k, v in self.stats.items()}  # +10% all stats для evolution, scalable без recursion
-            #send_mail_notification.delay(self.user.id, f"Reached level {self.level} on {self.hero_name} — +5 souls reward")  # Integrate mail app via Celery
+            # send_mail_notification.delay(self.user.id, f"Reached level {self.level} on {self.hero_name} — +5 souls reward")  # Integrate mail app via Celery
         self.save(update_fields=['level', 'stats'])  # Partial для perf, no full validate
 
     def save(self, *args, **kwargs):
