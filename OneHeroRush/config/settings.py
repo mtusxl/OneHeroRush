@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
+from celery.schedules import crontab
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -55,7 +56,9 @@ INSTALLED_APPS = [
     'Users',
     "Characters",
     "Progress",
-    "inventory"
+    "inventory",
+    "Quests",
+    "Clans"
 ]
 
 MIDDLEWARE = [
@@ -109,6 +112,13 @@ CELERY_TIMEZONE = 'UTC'  # Sync with Postgres TZ
 CELERY_BROKER_POOL_LIMIT = 100  # Pool для scalability, prevent exhaustion on 10k+ tasks (e.g. bulk chest open 1-20x auto)
 CELERY_WORKER_CONCURRENCY = os.cpu_count() or 4  # Auto-scale workers
 CELERY_TASK_ACKS_LATE = True  # Retry on failure for critical (e.g. progress save act/etap/wave, inventory items equip/sell for gold/exp)
+
+CELERY_BEAT_SCHEDULE = {
+    'reset_daily_quests': {
+        'task': 'Quests.tasks.reset_daily_quests',
+        'schedule': crontab(hour=0, minute=0),  # Ежедневно в полночь
+    },
+}
 
 
 

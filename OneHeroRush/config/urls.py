@@ -26,4 +26,6 @@ urlpatterns = [
     path('api/', include('Characters.urls')),
     path('api/', include('Progress.urls')),
     path('api/', include('inventory.urls')),
+    path('api/', include('Quests.urls')),
+    path('api/', include('Clans.urls')),
 ]
