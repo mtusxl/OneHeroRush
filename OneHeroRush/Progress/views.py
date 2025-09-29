@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from django.db import transaction
 from .models import Progress
 from .serializers import ProgressSerializer, UpdateProgressSerializer
-# from common.tasks import recalculate_mmr
-# from .tasks import calculate_offline_farm
+from common.tasks import recalculate_mmr
+from .tasks import calculate_offline_farm
 
 class ProgressViewSet(viewsets.ModelViewSet):
     '''
@@ -34,5 +34,5 @@ class ProgressViewSet(viewsets.ModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         # При GET — calc offline farm async
-        # calculate_offline_farm.delay(request.user.id)
+        calculate_offline_farm.delay(request.user.id)
         return super().retrieve(request, *args, **kwargs)

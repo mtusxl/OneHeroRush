@@ -15,7 +15,6 @@ class ItemViewSet(viewsets.ModelViewSet):
     serializer_class = ItemSerializer
 
     def get_queryset(self):
-        # фильтруем только предметы текущего пользователя
         return Item.objects.filter(user=self.request.user)
 
     @action(detail=True, methods=["post"])
@@ -30,8 +29,6 @@ class ItemViewSet(viewsets.ModelViewSet):
 
         # снимаем все предметы того же типа
         Item.objects.filter(user=request.user, name=item.name).update(is_equipped=False)
-
-        # экипируем новый
         item.is_equipped = True
         item.save(update_fields=["is_equipped"])
 
@@ -76,11 +73,11 @@ class ChestViewSet(viewsets.ModelViewSet):
         """
         chest = self.get_object()
         try:
-            item = chest.open()  # вся логика теперь в модели
+            item = chest.open()  
         except ValidationError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        # асинхронно пересчитываем MMR
+    
         # recalculate_mmr.delay(request.user.id)
 
         return Response(

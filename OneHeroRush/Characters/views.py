@@ -10,7 +10,7 @@ from django.db import transaction
 from django.core.exceptions import PermissionDenied
 from .models import Character
 from .serializers import CharacterSerializer, CreateCharacterSerializer, SelectCharacterSerializer
-# from common.tasks import recalculate_mmr, update_clan_rank, send_mail_notification
+from common.tasks import recalculate_mmr , update_clan_rank #, send_mail_notification
 
 class CharacterThrottle(UserRateThrottle):
     rate = '10/min'
@@ -70,7 +70,7 @@ def select_character(request):
             char = Character.objects.get(id=serializer.validated_data['character_id'], user=request.user)
             char.is_active = True
             char.save()
-            # recalculate_mmr.delay(request.user.id)
+            recalculate_mmr.delay(request.user.id)
             # send_mail_notification.delay(request.user.id, f"Выбрали {char.hero_name} - бонус {char.race_bonus}")
         return Response({'message': 'Character selected'}, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

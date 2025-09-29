@@ -85,7 +85,7 @@ class Item(models.Model):
         (3.0, 'Immortal'),
         (3.1, 'Arcana'),
     ]
-    RARITY_WEIGHTS = [45, 30, 15, 5, 3, 1, 0.7, 0.3]  # Шансы по ТЗ
+    RARITY_WEIGHTS = [45, 30, 15, 5, 3, 1, 0.7, 0.3]  # Шансы 
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='items')
     name = models.CharField(max_length=50, choices=ITEM_CHOICES)
@@ -99,7 +99,7 @@ class Item(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.pk:
-            self.randomize_stats()  # Рандом при создании
+            self.randomize_stats()
         super().save(*args, **kwargs)
 
     def randomize_stats(self):
@@ -108,14 +108,14 @@ class Item(models.Model):
         '''
         stats_keys = ['vampirism', 'crit', 'evasion', 'resist_magic', 'heal_reduction', 'regen_hp', 'regen_mp', 'armor', 'attack_speed', 
                       'int', 'str', 'agi', 'hp', 'mp', 'armor_reduction', 'magic_armor_reduction', 'attack_range', 'damage', 'move_speed']
-        self.stats = {k: round(uniform(5, 15) * self.rarity_multiplier) for k in stats_keys}  # Пример рандом
+        self.stats = {k: round(uniform(5, 15) * self.rarity_multiplier) for k in stats_keys}
 
 class Chest(models.Model):
     '''
     Модель сундука: уровень для rarity шанса, открытие за keys, auto 1-20x.
     '''
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chests')
-    level = models.PositiveIntegerField(default=1)  # Влияет на rarity
+    level = models.PositiveIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -137,18 +137,18 @@ class Chest(models.Model):
         rarity_multiplier = choices(rarity_values, weights=weights)[0]
         name = choices([choice[0] for choice in Item.ITEM_CHOICES])[0]
 
-        # создаем предмет
+      
         item = Item.objects.create(
             user=self.user, 
             name=name, 
             rarity_multiplier=rarity_multiplier
         )
 
-        # списываем ключ
+    
         self.user.keys -= 1
         self.user.save(update_fields=['keys'])
 
-        # удаляем сундук
+      
         self.delete()
 
         return item

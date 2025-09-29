@@ -4,7 +4,7 @@ from django.contrib.postgres.fields import JSONField
 from django.contrib.auth import get_user_model
 # from common.tasks import send_mail_notification
 
-User = get_user_model()  # Кастом User с steam_id как username
+User = get_user_model() 
 
 class Character(models.Model):
     '''
@@ -61,7 +61,7 @@ class Character(models.Model):
     hero_name = models.CharField(max_length=50, choices=HERO_CHOICES)
     level = models.PositiveIntegerField(default=1)
     stats = models.JSONField(default=dict)  # {'str': int, 'agi': int, 'int': int, 'hp': int, 'mp': int, ... randomized}
-    race_bonus = models.JSONField(default=dict)  # Из RACE_BONUSES по hero_name
+    race_bonus = models.JSONField(default=dict) 
     #items = models.ManyToManyField('Item', related_name='characters', blank=True)  # Экипировка
     #soul = models.ForeignKey('Soul', on_delete=models.SET_NULL, null=True, blank=True)  # Душа, добавим модель позже
     is_active = models.BooleanField(default=False)
@@ -114,14 +114,14 @@ class Character(models.Model):
         Увеличивает уровень героя и эволюционирует статы (+10% каждые 10 уровней). 
         Вызывается из progress после волны, уведомление по почте.
         '''
-        self.level += 1  # Call in /progress/update after wave, but here for evolution check
+        self.level += 1  
         if self.level % 10 == 0:  # N=10 example из ТЗ "за каждый N уровень", configurable via const or field for patches
             self.stats = {k: round(v * 1.1) for k, v in self.stats.items()}  # +10% all stats для evolution, scalable без recursion
-            # send_mail_notification.delay(self.user.id, f"Reached level {self.level} on {self.hero_name} — +5 souls reward")  # Integrate mail app via Celery
-        self.save(update_fields=['level', 'stats'])  # Partial для perf, no full validate
+            # send_mail_notification.delay(self.user.id, f"Reached level {self.level} on {self.hero_name} — +5 souls reward")
+        self.save(update_fields=['level', 'stats']) 
 
     def save(self, *args, **kwargs):
-        if not self.pk:  # On create only: auto race_bonus + optional randomize
+        if not self.pk: 
             race = self.get_race()
             self.race_bonus = self.RACE_BONUSES.get(race, {})
             self.randomize_base_stats()  # Optional, toggle via settings if not needed (fixed base for balance)
