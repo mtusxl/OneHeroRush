@@ -90,7 +90,7 @@ class Item(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='items')
     name = models.CharField(max_length=50, choices=ITEM_CHOICES)
     level = models.PositiveIntegerField(default=1)
-    stats = JSONField(default=dict)  # Randomized: vampirism, crit и т.д.
+    stats = models.JSONField(default=dict)  # Randomized: vampirism, crit и т.д.
     rarity_multiplier = models.FloatField(choices=RARITY_CHOICES, default=0.5)
     created_at = models.DateTimeField(auto_now_add=True)
 

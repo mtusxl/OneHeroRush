@@ -2,7 +2,7 @@
 from celery import shared_task
 from django.contrib.auth import get_user_model
 from django.db import transaction
-# from common.tasks import recalculate_mmr
+from common.tasks import recalculate_mmr
 
 
 User = get_user_model()  
@@ -26,5 +26,5 @@ def bulk_open_chest(user_id, count):
             item = chest.open()
             items.append(item.id)
 
-    # recalculate_mmr.delay(user_id)
+    recalculate_mmr.delay(user_id)
     return items

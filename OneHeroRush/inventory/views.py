@@ -35,7 +35,7 @@ class ItemViewSet(viewsets.ModelViewSet):
         item.is_equipped = True
         item.save(update_fields=["is_equipped"])
 
-        # recalculate_mmr.delay(request.user.id)
+        recalculate_mmr.delay(request.user.id)
 
         return Response({"message": f"Equipped {item.name}"}, status=status.HTTP_200_OK)
 
@@ -50,7 +50,7 @@ class ItemViewSet(viewsets.ModelViewSet):
         request.user.save(update_fields=["gold"])
         item.delete()
 
-        # recalculate_mmr.delay(request.user.id)
+        recalculate_mmr.delay(request.user.id)
 
         return Response(
             {"message": f"Sold {item.name} for {gold_reward} gold",
