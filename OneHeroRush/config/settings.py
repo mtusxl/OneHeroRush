@@ -53,12 +53,14 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'drf_yasg',
+    "channels",
     'Users',
     "Characters",
     "Progress",
     "inventory",
     "Quests",
-    "Clans"
+    "Clans",
+    "Chats"
 ]
 
 MIDDLEWARE = [
@@ -138,6 +140,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
 
 
 
@@ -201,6 +204,15 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
     'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema',
+}
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
 }
 
 AUTH_USER_MODEL = "Users.User"
