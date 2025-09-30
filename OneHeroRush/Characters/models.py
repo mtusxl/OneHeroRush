@@ -2,7 +2,7 @@ from random import uniform
 from django.db import models
 from django.contrib.postgres.fields import JSONField
 from django.contrib.auth import get_user_model
-# from common.tasks import send_mail_notification
+from common.tasks import send_mail_notification
 
 User = get_user_model() 
 
@@ -62,7 +62,7 @@ class Character(models.Model):
     level = models.PositiveIntegerField(default=1)
     stats = models.JSONField(default=dict)  # {'str': int, 'agi': int, 'int': int, 'hp': int, 'mp': int, ... randomized}
     race_bonus = models.JSONField(default=dict) 
-    #items = models.ManyToManyField('Item', related_name='characters', blank=True)  # Экипировка
+    items = models.ManyToManyField('Item', related_name='characters', blank=True)  # Экипировка
     #soul = models.ForeignKey('Soul', on_delete=models.SET_NULL, null=True, blank=True)  # Душа, добавим модель позже
     is_active = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -117,7 +117,7 @@ class Character(models.Model):
         self.level += 1  
         if self.level % 10 == 0:  # N=10 example из ТЗ "за каждый N уровень", configurable via const or field for patches
             self.stats = {k: round(v * 1.1) for k, v in self.stats.items()}  # +10% all stats для evolution, scalable без recursion
-            # send_mail_notification.delay(self.user.id, f"Reached level {self.level} on {self.hero_name} — +5 souls reward")
+            send_mail_notification.delay(self.user.id, f"Reached level {self.level} on {self.hero_name} — +5 souls reward")
         self.save(update_fields=['level', 'stats']) 
 
     def save(self, *args, **kwargs):

@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from django.db import transaction
 from .models import Item, Chest
 from .serializers import ItemSerializer, ChestSerializer, OpenChestSerializer
-from common.tasks import recalculate_mmr  # Для update после equip/sell
+from common.tasks import recalculate_mmr  
 
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -78,7 +78,7 @@ class ChestViewSet(viewsets.ModelViewSet):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     
-        # recalculate_mmr.delay(request.user.id)
+        recalculate_mmr.delay(request.user.id)
 
         return Response(
             {"message": f"Chest opened, got {item.name}", "item_id": item.id},

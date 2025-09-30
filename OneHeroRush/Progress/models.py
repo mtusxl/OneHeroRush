@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from Characters.models import Character  # Для active hero buffs
-# from common.tasks import recalculate_mmr
+from common.tasks import recalculate_mmr
 
 User = get_user_model()
 
@@ -62,8 +62,8 @@ class Progress(models.Model):
             active_char.level_up()
         # Награды (gold/keys, + босс если волна=5)
         self.user.gold += 100  # Пример
-        self.user.keys += 1
+        self.user.keys += 3
         self.user.save(update_fields=['gold', 'keys'])
         self.save()
         # Async MMR
-        # recalculate_mmr.delay(self.user.id)
+        recalculate_mmr.delay(self.user.id)

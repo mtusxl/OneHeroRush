@@ -1,10 +1,10 @@
 from django.conf import settings
 from django.db import models
-from django.contrib.postgres.fields import JSONField
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.db import transaction
-from common.tasks import recalculate_mmr
+from common.tasks import recalculate_mmr, send_mail_notification
+
 
 User = get_user_model()
 
@@ -46,7 +46,7 @@ class Quest(models.Model):
                 self.users_completed.add(user)
                 self.save()
             # Async уведомление и MMR
-            # send_mail_notification.delay(user.id, f"Квест '{self.name}' завершён! Награда: {self.reward_diamonds} алмазов + {self.reward_souls} душ")
+            send_mail_notification.delay(user.id, f"Квест '{self.name}' завершён! Награда: {self.reward_diamonds} алмазов + {self.reward_souls} душ")
             recalculate_mmr.delay(user.id)
 class Achievement(models.Model):
     """

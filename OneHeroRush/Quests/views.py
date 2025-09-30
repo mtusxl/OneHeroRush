@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from django.db import transaction
 from .models import Quest
 from .serializers import QuestSerializer, CompleteQuestSerializer
-from common.tasks import recalculate_mmr #, send_mail_notification
+from common.tasks import send_mail_notification
 
 class QuestViewSet(viewsets.ReadOnlyModelViewSet):
     '''
@@ -29,5 +29,6 @@ class QuestViewSet(viewsets.ReadOnlyModelViewSet):
         if serializer.is_valid():
             if serializer.validated_data['completed']:
                 quest.complete(request.user)
+                send_mail_notification(pk, 'Квест завершён')
             return Response({'message': 'Квест завершён'})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
