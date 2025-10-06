@@ -16,7 +16,7 @@ schema_view = get_schema_view(
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
-    patterns=[path('api/', include('Users.urls'))],  # Scan для /api/auth/login/ etc. (auto-fields от serializers)
+    patterns=[path('api/', include('Users.urls'))],  
 )
 urlpatterns = [
     path('admin/', admin.site.urls),  
@@ -28,4 +28,10 @@ urlpatterns = [
     path('api/', include('inventory.urls')),
     path('api/', include('Quests.urls')),
     path('api/', include('Clans.urls')),
+    path('api/', include('Leaderboard.urls')),
+    path('api/', include('News.urls')),
+    path('api/', include('Pets.urls')),
+    path('api/', include('Soul.urls')),
+    path('api/', include('Chats.urls')),
+    
 ]

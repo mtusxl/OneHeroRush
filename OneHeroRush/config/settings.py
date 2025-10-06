@@ -60,7 +60,14 @@ INSTALLED_APPS = [
     "inventory",
     "Quests",
     "Clans",
-    "Chats"
+    "Chats",
+    "Leaderboard",
+    "Pets",
+    "News",
+    "Soul",
+    "Shop",
+    "Messages"
+
 ]
 
 MIDDLEWARE = [
