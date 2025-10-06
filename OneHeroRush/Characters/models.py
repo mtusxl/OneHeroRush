@@ -60,12 +60,13 @@ class Character(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='characters')
     hero_name = models.CharField(max_length=50, choices=HERO_CHOICES)
     level = models.PositiveIntegerField(default=1)
-    stats = models.JSONField(default=dict)  # {'str': int, 'agi': int, 'int': int, 'hp': int, 'mp': int, ... randomized}
+    stats = models.JSONField(default=dict) 
     race_bonus = models.JSONField(default=dict) 
-    items = models.ManyToManyField('Item', related_name='characters', blank=True)  # Экипировка
-    #soul = models.ForeignKey('Soul', on_delete=models.SET_NULL, null=True, blank=True)  # Душа, добавим модель позже
+    items = models.ManyToManyField('inventory.Item', related_name='characters', blank=True) 
+    soul = models.ForeignKey('Soul', on_delete=models.SET_NULL, null=True, blank=True)  
     is_active = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
 
     class Meta:
         indexes = [
@@ -115,8 +116,8 @@ class Character(models.Model):
         Вызывается из progress после волны, уведомление по почте.
         '''
         self.level += 1  
-        if self.level % 10 == 0:  # N=10 example из ТЗ "за каждый N уровень", configurable via const or field for patches
-            self.stats = {k: round(v * 1.1) for k, v in self.stats.items()}  # +10% all stats для evolution, scalable без recursion
+        if self.level % 10 == 0:  
+            self.stats = {k: round(v * 1.1) for k, v in self.stats.items()} 
             send_mail_notification.delay(self.user.id, f"Reached level {self.level} on {self.hero_name} — +5 souls reward")
         self.save(update_fields=['level', 'stats']) 
 
@@ -124,7 +125,7 @@ class Character(models.Model):
         if not self.pk: 
             race = self.get_race()
             self.race_bonus = self.RACE_BONUSES.get(race, {})
-            self.randomize_base_stats()  # Optional, toggle via settings if not needed (fixed base for balance)
+            self.randomize_base_stats()
         super().save(*args, **kwargs)
 
     def get_race(self):

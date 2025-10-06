@@ -1,14 +1,14 @@
 from rest_framework import serializers
 from .models import Character
-# from inventory.models import Item  
+from inventory.models import Item  
 
-# class ItemSerializer(serializers.ModelSerializer):
-#     '''
-#     Сериализатор для предметов: базовые поля для nested в Character.
-#     '''
-#     class Meta:
-#         model = Item
-#         fields = ['id', 'name', 'level', 'stats', 'rarity_multiplier']
+class ItemSerializer(serializers.ModelSerializer):
+    '''
+    Сериализатор для предметов: базовые поля для nested в Character.
+    '''
+    class Meta:
+        model = Item
+        fields = ['id', 'name', 'level', 'stats', 'rarity_multiplier']
 
 class CharacterSerializer(serializers.ModelSerializer):
     '''
