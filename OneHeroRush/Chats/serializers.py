@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ChatMessage, Mail
+from .models import ChatMessage
 
 class ChatMessageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -8,8 +8,5 @@ class ChatMessageSerializer(serializers.ModelSerializer):
 
 
 
-class MailSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Mail
-        fields = ["id", "subject", "body", "is_read", "created_at"]
+
 
