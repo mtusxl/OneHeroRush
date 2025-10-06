@@ -1,7 +1,6 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from Characters.models import Character  # Для active hero buffs
 from common.tasks import recalculate_mmr
 
 User = get_user_model()

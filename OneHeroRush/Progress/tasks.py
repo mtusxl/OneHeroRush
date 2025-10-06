@@ -26,4 +26,4 @@ def calculate_offline_farm(user_id):
         user.save(update_fields=['gold', 'keys'])
     # Уведомление, если >0
     if gold or keys:
-        send_mail_notification.delay(user_id, f"Оффлайн-фарм: +{gold} gold, +{keys} keys")
+        send_mail_notification.delay(user_id = user_id, messages=f"Оффлайн-фарм: +{gold} gold, +{keys} keys", mail_type="reward")
