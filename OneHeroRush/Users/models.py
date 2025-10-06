@@ -27,6 +27,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     diamonds = models.IntegerField(default=0)
     souls = models.IntegerField(default=0)
     keys = models.IntegerField(default=0)
+    soul_coupons = models.PositiveIntegerField(default=0)
 
     # Рейтинг (MMR)
     mmr = models.IntegerField(default=0)
@@ -50,3 +51,9 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.username
+    
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    active_pet = models.ForeignKey('Pets.UserPet', on_delete=models.SET_NULL, 
+                                   null=True, blank=True, related_name='active_for_user')
