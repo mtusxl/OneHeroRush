@@ -4,7 +4,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.contrib.auth import get_user_model
 from Clans.models import Clan, ClanMember
-from Chats.models import Mail
+from Messages.models import Messages
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
@@ -52,17 +52,38 @@ def update_clan_rank(clan_id):
         clan.save(update_fields=['rank', 'max_members'])
 
 @shared_task
-def send_mail_notification(user_id, message):
-    '''
-    Асинхронно создаёт письмо в Mail и отправляет WS-уведомление для реального времени.
-    '''
-    user = User.objects.get(id=user_id)
-    with transaction.atomic():
-        Mail.objects.create(user=user, body=message, is_read=False)
+def send_mail_notification(user_id: int, message: str, subject: str = "Уведомление", mail_type: str = "system"):
+    """
+    Асинхронно создаёт запись в Messages (почта/уведомление)
+    и отправляет WebSocket-ивент пользователю.
+    """
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return f"User {user_id} not found"
 
+    with transaction.atomic():
+        Messages.objects.create(
+            user=user,
+            subject=subject,
+            body=message,
+            is_read=False,
+            mail_type=mail_type,  
+        )
+
+    # Отправка WS-уведомления (HUD/реальное время)
     channel_layer = get_channel_layer()
     async_to_sync(channel_layer.group_send)(
         f"user_{user_id}",
-        {"type": "notification", "message": message}
-   )
+        {
+            "type": "notification",
+            "message": {
+                "subject": subject,
+                "body": message,
+            },
+        },
+    )
+
+    return f"Notification sent to user {user_id}"
+   
 
