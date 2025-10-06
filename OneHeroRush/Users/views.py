@@ -54,12 +54,11 @@ class LoginView(APIView):
     
 
 class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]  # Требует токен в headers (для security: только авторизованный юзер выходит)
+    permission_classes = [IsAuthenticated]
 
     def delete(self, request):  # DELETE метод (стандарт для logout в REST; POST тоже ок, но DELETE чище)
         # Удаляем все токены юзера (на случай нескольких устройств — для сессий чата ЛС/кланового, не плодить в authtoken_token)
         Token.objects.filter(user=request.user).delete()
-        # Опционально: Celery.delay(on_logout_task, request.user.id) — e.g., сброс last_login для оффлайн-фарма (+gold/keys по времени, с бонусом расы Нежить +150 HP для Lifestealer; оповещение по почте "Сессия завершена, фарм активирован!")
-        # Лог для Prometheus: auth_logout_total.inc() — метрика success для Grafana (rate на 10k+ выходов/час)
+        
 
-        return Response({"detail": "Successfully logged out."}, status=status.HTTP_200_OK)  # Простой JSON (без user data — сессия чиста)
+        return Response({"detail": "Successfully logged out."}, status=status.HTTP_200_OK)  
