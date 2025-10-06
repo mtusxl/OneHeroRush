@@ -29,6 +29,6 @@ class QuestViewSet(viewsets.ReadOnlyModelViewSet):
         if serializer.is_valid():
             if serializer.validated_data['completed']:
                 quest.complete(request.user)
-                send_mail_notification(pk, 'Квест завершён')
+                send_mail_notification(user_id=pk, message='Квест завершён', subject="Завершение квеста", mail_type="event")
             return Response({'message': 'Квест завершён'})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

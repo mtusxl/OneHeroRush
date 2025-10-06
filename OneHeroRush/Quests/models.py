@@ -46,7 +46,12 @@ class Quest(models.Model):
                 self.users_completed.add(user)
                 self.save()
             # Async уведомление и MMR
-            send_mail_notification.delay(user.id, f"Квест '{self.name}' завершён! Награда: {self.reward_diamonds} алмазов + {self.reward_souls} душ")
+            send_mail_notification.delay(
+                user.id,
+                f"Квест '{self.name}' завершён! Награда: {self.reward_diamonds} алмазов + {self.reward_souls} душ",
+                "Награда за квест",  
+                "reward"             
+            )
             recalculate_mmr.delay(user.id)
 class Achievement(models.Model):
     """
