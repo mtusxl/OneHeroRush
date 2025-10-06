@@ -63,7 +63,7 @@ class Character(models.Model):
     stats = models.JSONField(default=dict) 
     race_bonus = models.JSONField(default=dict) 
     items = models.ManyToManyField('inventory.Item', related_name='characters', blank=True) 
-    soul = models.ForeignKey('Soul', on_delete=models.SET_NULL, null=True, blank=True)  
+    soul = models.ForeignKey('Soul.Soul', on_delete=models.SET_NULL, null=True, blank=True, related_name="character_souls")  
     is_active = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
