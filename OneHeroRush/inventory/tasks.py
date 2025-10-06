@@ -1,4 +1,3 @@
-# Если нужно bulk open async, но для простоты в view (если count большой, перемести в Celery)
 from celery import shared_task
 from django.contrib.auth import get_user_model
 from django.db import transaction
