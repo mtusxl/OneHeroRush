@@ -3,62 +3,143 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
+from django.db import DatabaseError
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+import logging
 from .serializers import LoginSerializer, UserPublicSerializer
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
+logger = logging.getLogger(__name__)
+
 class LoginView(APIView):
     permission_classes = [AllowAny]
-    throttle_classes = []  # Уже глобально в settings; здесь override если нужно
 
     @swagger_auto_schema(  
         request_body=LoginSerializer,
         responses={
-            200: UserPublicSerializer(many=False),
-            400: openapi.Response('Validation error', examples={'application/json': {'username': ['Required.']}}),
-            401: openapi.Response('Invalid credentials', examples={'application/json': {'detail': 'Invalid username or password.'}}),
-            403: openapi.Response('Inactive account', examples={'application/json': {'detail': 'Account is inactive.'}}),
+            200: openapi.Response('Success', UserPublicSerializer),
+            400: openapi.Response('Validation error'),
+            401: openapi.Response('Invalid credentials'),
+            403: openapi.Response('Inactive account'),
+            500: openapi.Response('Internal server error'),
         },
-        operation_description="Авторизация по username (steam_id/ник для чата ЛС/кланового) + password (bcrypt хэш). Throttling 5/min anon (Redis). Успех: token для headers (e.g., /api/clans/join/ пассивок +статы), +gold/diamonds/souls/keys для HUD/квестов 'открыть сундук 30 раз' за 150 diamonds.",
-        examples={'application/json': { 
-            'summary': 'Пример запроса',
-            'value': {'username': 'pudge_fan', 'password': 'pass123'}  
-        }}
+        operation_description="Авторизация пользователя"
     )
-
     def post(self, request):
-        serializer = LoginSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST) 
+        try:
+            serializer = LoginSerializer(data=request.data)
+            if not serializer.is_valid():
+                logger.warning(f"Invalid login data: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST) 
 
-        username = serializer.validated_data['username']
-        password = serializer.validated_data['password']
+            username = serializer.validated_data['username']
+            password = serializer.validated_data['password']
 
-        user = authenticate(request, username=username, password=password)  # Django backend: хэш-чек + custom manager
-        if user is None:
-            return Response({"detail": "Invalid username or password."}, status=status.HTTP_401_UNAUTHORIZED)  # Не уточняем "какой" — anti-brute-force
+            logger.info(f"Login attempt for user: {username}")
 
-        if not user.is_active:
-            return Response({"detail": "Account is inactive."}, status=status.HTTP_403_FORBIDDEN)  # Для банов (blacklist в друзьях/чате)
+            # Аутентификация пользователя
+            user = authenticate(request, username=username, password=password)
+            if user is None:
+                logger.warning(f"Failed authentication for user: {username}")
+                return Response(
+                    {"detail": "Invalid username or password."}, 
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
 
-        # Успех: Token (get or create — для повторных логинов)
-        token, created = Token.objects.get_or_create(user=user)
-        # Опционально: Лог для Prometheus (auth_success_total.inc() — добавим в middleware позже)
+            if not user.is_active:
+                logger.warning(f"Attempt to login to inactive account: {username}")
+                return Response(
+                    {"detail": "Account is inactive."}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
-        user_serializer = UserPublicSerializer(user)
-        return Response({
-            'token': token.key,  # В headers для следующих запросов (e.g., /api/roulette/spin/ за 6-12 souls/keys/diamonds)
-            'user': user_serializer.data,  # Публичка: gold etc. для HUD/квестов ("открыть сундук 30 раз" за 150 diamonds)
-        }, status=status.HTTP_200_OK)
+            # Создаем или получаем токен
+            try:
+                token, created = Token.objects.get_or_create(user=user)
+                if created:
+                    logger.debug(f"New token created for user: {username}")
+                else:
+                    logger.debug(f"Existing token used for user: {username}")
+            except DatabaseError as e:
+                logger.error(f"Database error creating token for user {username}: {str(e)}")
+                return Response(
+                    {"detail": "Authentication service temporarily unavailable."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+
+            # Сериализуем данные пользователя
+            user_serializer = UserPublicSerializer(user)
+
+            logger.info(f"Successful login for user: {username} (ID: {user.id})")
+            
+            return Response({
+                'token': token.key,
+                'user': user_serializer.data,
+            }, status=status.HTTP_200_OK)
+
+        except DatabaseError as e:
+            logger.error(f"Database error during login for user {request.data.get('username')}: {str(e)}")
+            return Response(
+                {"detail": "Authentication service temporarily unavailable."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error during login: {str(e)}")
+            return Response(
+                {"detail": "Internal server error occurred."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def delete(self, request):  # DELETE метод (стандарт для logout в REST; POST тоже ок, но DELETE чище)
-        # Удаляем все токены юзера (на случай нескольких устройств — для сессий чата ЛС/кланового, не плодить в authtoken_token)
-        Token.objects.filter(user=request.user).delete()
-        
+    def delete(self, request):
+        try:
+            user = request.user
+            tokens_count = Token.objects.filter(user=user).count()
+            
+            # Удаляем все токены пользователя
+            deleted_count, _ = Token.objects.filter(user=user).delete()
+            
+            logger.info(f"User {user.username} (ID: {user.id}) logged out. Deleted {deleted_count} tokens.")
+            
+            return Response(
+                {"detail": "Successfully logged out.", "tokens_deleted": deleted_count}, 
+                status=status.HTTP_200_OK
+            )
+            
+        except DatabaseError as e:
+            logger.error(f"Database error during logout for user {request.user.id}: {str(e)}")
+            return Response(
+                {"detail": "Logout service temporarily unavailable."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error during logout for user {request.user.id}: {str(e)}")
+            return Response(
+                {"detail": "Internal server error occurred during logout."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        return Response({"detail": "Successfully logged out."}, status=status.HTTP_200_OK)  
+
+class UserProfileView(APIView):
+    """view для получения профиля пользователя"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user_serializer = UserPublicSerializer(request.user)
+            logger.debug(f"Profile data retrieved for user {request.user.id}")
+            
+            return Response({
+                'user': user_serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error retrieving profile for user {request.user.id}: {str(e)}")
+            return Response(
+                {"detail": "Error retrieving profile data."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

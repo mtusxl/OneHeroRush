@@ -1,6 +1,8 @@
 from django.db import models, transaction
 from django.conf import settings
+import logging
 
+logger = logging.getLogger(__name__)
 
 User = settings.AUTH_USER_MODEL
 
@@ -19,19 +21,19 @@ class Pet(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
     rarity = models.CharField(max_length=20, choices=RarityChoices.choices, default=RarityChoices.COMMON)
-    extra_bonus = models.JSONField(default=dict, blank=True)  # Уникальные свойства для редких, e.g. {"spell_dmg_boost": 15}
+    extra_bonus = models.JSONField(default=dict, blank=True)
 
     # Бонусы
-    bonus_gold = models.FloatField(default=0)             # % золота
-    bonus_mana_regen = models.FloatField(default=0)       # мана/сек
-    bonus_spell_damage = models.FloatField(default=0)     # % урон от заклинаний
-    bonus_magic_resist = models.FloatField(default=0)     # % сопротивление магии
-    bonus_health = models.IntegerField(default=0)         # + хп
-    bonus_hp_regen = models.FloatField(default=0)         # % реген хп
-    bonus_damage = models.FloatField(default=0)           # % физ урон
-    bonus_move_speed = models.FloatField(default=0)       # % скорость
-    bonus_attack_range = models.FloatField(default=0)     # + дальность атаки
-    bonus_crit_chance = models.FloatField(default=0)      # % шанс крита
+    bonus_gold = models.FloatField(default=0)
+    bonus_mana_regen = models.FloatField(default=0)
+    bonus_spell_damage = models.FloatField(default=0)
+    bonus_magic_resist = models.FloatField(default=0)
+    bonus_health = models.IntegerField(default=0)
+    bonus_hp_regen = models.FloatField(default=0)
+    bonus_damage = models.FloatField(default=0)
+    bonus_move_speed = models.FloatField(default=0)
+    bonus_attack_range = models.FloatField(default=0)
+    bonus_crit_chance = models.FloatField(default=0)
 
     class Meta:
         indexes = [models.Index(fields=['rarity'])]  
@@ -61,25 +63,29 @@ class UserPet(models.Model):
 
     class Meta:
         unique_together = ("user", "pet")
-        indexes = [models.Index(fields=['user', 'is_selected'])]  # Оптимизация для select
+        indexes = [models.Index(fields=['user', 'is_selected'])]
 
     def __str__(self):
         return f"{self.user.username} - {self.pet.name}"
 
 class UserSummonConfig(models.Model):
-    """Конфиг призыва для пользователя (lvl, exp как для душ)"""
+    """Конфиг призыва для пользователя"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="summon_config")
     summon_level = models.PositiveIntegerField(default=1)
     summon_exp = models.PositiveIntegerField(default=0)
-    # exp_to_next_level = formula, e.g. 100 * level
 
     def add_exp(self, amount):
-        with transaction.atomic():
-            self.summon_exp += amount
-            while self.summon_exp >= self.exp_to_next_level():
-                self.summon_exp -= self.exp_to_next_level()
-                self.summon_level += 1
-            self.save()
+        try:
+            with transaction.atomic():
+                self.summon_exp += amount
+                while self.summon_exp >= self.exp_to_next_level():
+                    self.summon_exp -= self.exp_to_next_level()
+                    self.summon_level += 1
+                    logger.info(f"User {self.user.id} leveled up summon to {self.summon_level}")
+                self.save()
+        except Exception as e:
+            logger.error(f"Error adding exp to user {self.user.id}: {str(e)}")
+            raise
 
     def exp_to_next_level(self):
-        return 100 * self.summon_level  
+        return 100 * self.summon_level

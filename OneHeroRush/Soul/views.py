@@ -1,79 +1,157 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.throttling import UserRateThrottle
 from django.shortcuts import get_object_or_404
-from django.db.transaction import atomic  # For atomic summons to prevent race conditions in multi-player
+from django.db import transaction, DatabaseError
+from django.core.cache import cache
+import logging
+import random
 from .models import Soul, PlayerSoul, SummonLevel, SoulRarity
 from .serializers import PlayerSoulSerializer, SummonRequestSerializer
-from Users.models import UserProfile  # Assume has diamonds, soul_coupons fields
-import random  # For rarity roll, but use numpy if ML-balanced in future (2025 std)
+from Users.models import UserProfile
 from Characters.models import Character
 
-class SummonSoulView(APIView):
-    # Throttle: inherit from global 5/min anon, but for auth users higher via Redis rate limit
-    def post(self, request):
-        serializer = SummonRequestSerializer(data=request.data)
-        if serializer.is_valid():
-            with atomic():  # Scalable transaction for 10k+ users
-                profile = get_object_or_404(UserProfile, user=request.user)  # Assume UserProfile with currencies
-                coupons = serializer.validated_data['coupons']
-                diamonds = serializer.validated_data['diamonds']
-                character = get_object_or_404(Character, id=serializer.validated_data['character_id'])
+logger = logging.getLogger(__name__)
 
-                # Calc effective coupons: 1 coupon or 2 diamonds = 1 summon unit
-                if coupons > 0 and diamonds > 0:
-                    return Response({'error': 'Use either coupons or diamonds'}, status=status.HTTP_400_BAD_REQUEST)
+class SummonThrottle(UserRateThrottle):
+    rate = '10/minute'
+
+class SummonSoulView(APIView):
+    throttle_classes = [SummonThrottle]
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            serializer = SummonRequestSerializer(data=request.data)
+            if not serializer.is_valid():
+                logger.warning(f"Invalid summon request from user {request.user.id}: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            data = serializer.validated_data
+            coupons = data['coupons']
+            diamonds = data['diamonds']
+            character_id = data['character_id']
+
+            logger.info(f"Summon attempt by user {request.user.id}: coupons={coupons}, diamonds={diamonds}, character_id={character_id}")
+
+            profile = UserProfile.objects.select_for_update().get(user=request.user)
+            character = get_object_or_404(Character, id=character_id)
+
+            # Проверяем валюту
+            if coupons > 0:
+                if profile.soul_coupons < coupons:
+                    logger.warning(f"User {request.user.id} has insufficient coupons: {profile.soul_coupons} < {coupons}")
+                    return Response({'error': 'Insufficient coupons'}, status=status.HTTP_400_BAD_REQUEST)
                 
-                if coupons:
-                    if coupons not in [15, 30]:  # TZ specific batches
-                        return Response({'error': 'Invalid coupon amount'}, status=status.HTTP_400_BAD_REQUEST)
-                    summons = 15 if coupons == 15 else 35  # Bonus for 30
-                    if profile.soul_coupons < coupons:
-                        return Response({'error': 'Insufficient coupons'}, status=status.HTTP_400_BAD_REQUEST)
-                    profile.soul_coupons -= coupons
-                elif diamonds:
-                    effective_coupons = diamonds // 2  # 1 coupon = 2 diamonds
-                    summons = effective_coupons  # No batch bonus for diamonds
-                    if profile.diamonds < diamonds:
-                        return Response({'error': 'Insufficient diamonds'}, status=status.HTTP_400_BAD_REQUEST)
-                    profile.diamonds -= diamonds
-                else:
-                    return Response({'error': 'Provide coupons or diamonds'}, status=status.HTTP_400_BAD_REQUEST)
+                summons = 15 if coupons == 15 else 35  # Бонус за 30
+                profile.soul_coupons -= coupons
+                currency_type = 'coupons'
                 
-                profile.save()
-                summon_lvl, _ = SummonLevel.objects.get_or_create(user=request.user)
+            else:  # diamonds
+                effective_coupons = diamonds // 2
+                if effective_coupons == 0:
+                    logger.warning(f"User {request.user.id} provided insufficient diamonds: {diamonds}")
+                    return Response({'error': 'Insufficient diamonds'}, status=status.HTTP_400_BAD_REQUEST)
                 
-                new_souls = []
-                for _ in range(summons):
-                    # Roll rarity based on lvl-adjusted chances (optimized dict access)
+                if profile.diamonds < diamonds:
+                    logger.warning(f"User {request.user.id} has insufficient diamonds: {profile.diamonds} < {diamonds}")
+                    return Response({'error': 'Insufficient diamonds'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                summons = effective_coupons
+                profile.diamonds -= diamonds
+                currency_type = 'diamonds'
+
+            
+            profile.save(update_fields=[currency_type])
+            logger.info(f"User {request.user.id} spent {coupons if coupons else diamonds} {currency_type} for {summons} summons")
+
+            # Получаем или создаем уровень призыва
+            summon_lvl, created = SummonLevel.objects.get_or_create(user=request.user)
+            if created:
+                logger.info(f"Created new summon level for user {request.user.id}")
+
+            new_souls = []
+            for i in range(summons):
+                try:
+                    # Бросок редкости
                     chances = summon_lvl.rarity_chances
-                    rarity = random.choices(list(chances.keys()), weights=list(chances.values()))[0]
-                    
-                    # Create or get soul template for character + rarity (cache if frequent)
-                    soul, _ = Soul.objects.get_or_create(
-                        character=character, rarity=rarity,
+                    rarities = list(chances.keys())
+                    weights = list(chances.values())
+                    rarity = random.choices(rarities, weights=weights)[0]
+
+                    # Создаем или получаем шаблон души
+                    soul, created = Soul.objects.get_or_create(
+                        character=character,
+                        rarity=rarity,
                         defaults={
-                            'open_stats': self.generate_open_stats(rarity),  # Func for random stats per TZ (vampirism etc, but for souls it's character-unique)
-                            'hidden_stats': self.generate_hidden_stats(),  # Admin-tuned
-                            'unique_properties': self.generate_unique_props(rarity) if rarity in ['LEGENDARY', 'IMMORTAL'] else []
+                            'open_stats': self.generate_open_stats(rarity),
+                            'hidden_stats': self.generate_hidden_stats(),
+                            'unique_properties': self.generate_unique_props(rarity)
                         }
                     )
-                    
+
+                    if created:
+                        logger.debug(f"Created new soul template: character={character.id}, rarity={rarity}")
+
+                    # Создаем душу для игрока
                     player_soul = PlayerSoul.objects.create(user=request.user, soul=soul)
                     new_souls.append(player_soul)
-                    summon_lvl.add_experience(1)  # 1 exp per summon unit
-                
-                return Response({'souls': PlayerSoulSerializer(new_souls, many=True).data}, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
+                    # Добавляем опыт
+                    summon_lvl.add_experience(1)
+
+                    logger.debug(f"Summon #{i+1} for user {request.user.id}: {rarity} soul")
+
+                except Exception as e:
+                    logger.error(f"Error in individual summon #{i+1} for user {request.user.id}: {str(e)}")
+                    continue  # Продолжаем несмотря на ошибки в отдельных призывах
+
+            logger.info(f"User {request.user.id} successfully summoned {len(new_souls)} souls")
+
+            return Response({
+                'souls': PlayerSoulSerializer(new_souls, many=True).data,
+                'summons_count': len(new_souls)
+            }, status=status.HTTP_201_CREATED)
+
+        except UserProfile.DoesNotExist:
+            logger.error(f"UserProfile not found for user {request.user.id}")
+            return Response({'error': 'User profile not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Character.DoesNotExist:
+            logger.error(f"Character {data.get('character_id')} not found for user {request.user.id}")
+            return Response({'error': 'Character not found'}, status=status.HTTP_404_NOT_FOUND)
+        except DatabaseError as e:
+            logger.error(f"Database error during summon for user {request.user.id}: {str(e)}")
+            return Response({'error': 'Database error occurred'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception as e:
+            logger.error(f"Unexpected error during summon for user {request.user.id}: {str(e)}")
+            return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def generate_open_stats(self, rarity):
-        # TZ: randomized like items, but character-unique - e.g. damage, hp, etc. Multiplied by rarity later in character calc
-        base_stats = {'damage': random.randint(5, 20), 'hp_regen': random.randint(1, 5)}  # Extend per character/race
+        """Генерация открытых статов души"""
+        base_stats = {
+            'damage': random.randint(5, 20) * self._get_rarity_multiplier(rarity),
+            'hp_regen': random.randint(1, 5) * self._get_rarity_multiplier(rarity)
+        }
         return base_stats
-    
+
     def generate_hidden_stats(self):
-        return {'balance_tweak': random.randint(-5, 5)}  # Patchnote hidden
-    
+        """Генерация скрытых статов"""
+        return {'balance_tweak': random.randint(-5, 5)}
+
     def generate_unique_props(self, rarity):
-        # TZ: unique for rarest, e.g. +15% spell dmg vs specific creeps
-        return ['+15% spell dmg vs Shadow Demon’s Shadow'] if rarity == 'IMMORTAL' else []
+        """Генерация уникальных свойств для редких душ"""
+        if rarity == 'IMMORTAL':
+            return ['+15% spell dmg vs Shadow Demon\'s Shadow']
+        elif rarity == 'LEGENDARY':
+            return ['+10% spell dmg vs Shadow Demon\'s Shadow']
+        return []
+
+    def _get_rarity_multiplier(self, rarity):
+        """Множитель для статов в зависимости от редкости"""
+        multipliers = {
+            'COMMON': 1.0, 'SUPERIOR': 1.2, 'EXCELLENT': 1.5,
+            'RARE': 2.0, 'UNIQUE': 2.5, 'EPIC': 2.8,
+            'LEGENDARY': 3.0, 'IMMORTAL': 3.1
+        }
+        return multipliers.get(rarity, 1.0)

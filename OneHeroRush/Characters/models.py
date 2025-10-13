@@ -1,9 +1,13 @@
+import logging
 from random import uniform
+import random
 from django.db import models
 from django.contrib.postgres.fields import JSONField
 from django.contrib.auth import get_user_model
 from common.tasks import send_mail_notification
 
+
+logger = logging.getLogger(__name__)
 User = get_user_model() 
 
 class Character(models.Model):
@@ -73,13 +77,16 @@ class Character(models.Model):
             models.Index(fields=['user', 'hero_name']),
             models.Index(fields=['user', 'is_active']),
         ]
-        unique_together = ['user', 'hero_name']  # Один герой на юзера
+        unique_together = ['user', 'hero_name'] 
 
     def randomize_base_stats(self):
         '''
         Рандомизирует базовые статы героя (±10% от Dota-значений) для разнообразия при создании.
         '''
-        base_stats = {
+        try:
+            logger.info(f"Starting stat randomization for hero: {self.hero_name}, user: {self.user.id}")
+            
+            base_stats = {
             'Pudge': {'str': 25, 'agi': 17, 'int': 16, 'hp': 700, 'mp': 267, 'armor': 1, 'damage': 55, 'move_speed': 280, 'attack_range': 175, 'regen_hp': 3.5, 'regen_mp': 0.8, 'vampirism': 0, 'crit': 0, 'evasion': 0, 'resist_magic': 0.25, 'heal_reduction': 0, 'armor_reduction': 0, 'magic_armor_reduction': 0},
             'Necrophos': {'str': 18, 'agi': 15, 'int': 21, 'hp': 560, 'mp': 327, 'armor': 1, 'damage': 48, 'move_speed': 280, 'attack_range': 550, 'regen_hp': 1.7, 'regen_mp': 1.05, 'vampirism': 0, 'crit': 0, 'evasion': 0, 'resist_magic': 0.25, 'heal_reduction': 0, 'armor_reduction': 0, 'magic_armor_reduction': 0},
             'Juggernaut': {'str': 20, 'agi': 36, 'int': 14, 'hp': 600, 'mp': 243, 'armor': 4.76, 'damage': 58, 'move_speed': 305, 'attack_range': 150, 'regen_hp': 1.5, 'regen_mp': 0.7, 'vampirism': 0, 'crit': 0, 'evasion': 0, 'resist_magic': 0.25, 'heal_reduction': 0, 'armor_reduction': 0, 'magic_armor_reduction': 0},
@@ -107,32 +114,94 @@ class Character(models.Model):
             'Bounty Hunter': {'str': 19, 'agi': 21, 'int': 22, 'hp': 580, 'mp': 339, 'armor': 4.36, 'damage': 52, 'move_speed': 325, 'attack_range': 150, 'regen_hp': 2.35, 'regen_mp': 1.1, 'vampirism': 0, 'crit': 0, 'evasion': 0, 'resist_magic': 0.25, 'heal_reduction': 0, 'armor_reduction': 0, 'magic_armor_reduction': 0},
             'Riki': {'str': 18, 'agi': 30, 'int': 14, 'hp': 560, 'mp': 243, 'armor': 4.8, 'damage': 52, 'move_speed': 315, 'attack_range': 150, 'regen_hp': 2.7, 'regen_mp': 0.7, 'vampirism': 0, 'crit': 0, 'evasion': 0, 'resist_magic': 0.25, 'heal_reduction': 0, 'armor_reduction': 0, 'magic_armor_reduction': 0},
             'Spirit Breaker': {'str': 28, 'agi': 17, 'int': 14, 'hp': 760, 'mp': 243, 'armor': 3.72, 'damage': 57, 'move_speed': 290, 'attack_range': 150, 'regen_hp': 2.5, 'regen_mp': 0.7, 'vampirism': 0, 'crit': 0, 'evasion': 0, 'resist_magic': 0.25, 'heal_reduction': 0, 'armor_reduction': 0, 'magic_armor_reduction': 0},
-        }.get(self.hero_name, {})
-        self.stats = {k: round(v * uniform(0.9, 1.1)) for k, v in base_stats.items()}  
+            }.get(self.hero_name, {})
+            self.stats = {k: round(v * uniform(0.9, 1.1)) for k, v in base_stats.items()}  
+                
+            if not base_stats:
+                logger.error(f"Base stats not found for hero: {self.hero_name}")
+                return
+            
+            randomized_stats = {}
+            for k, v in base_stats.items():
+                multiplier = random.uniform(0.9, 1.1)
+                randomized_value = v * multiplier
+                
+                if isinstance(v, int):
+                    randomized_stats[k] = round(randomized_value)
+                else:
+                    randomized_stats[k] = round(randomized_value, 2)
+            
+            self.stats = randomized_stats
+            
+            logger.info(f"Successfully randomized stats for {self.hero_name}. Stats: {randomized_stats}")
+            
+        except Exception as e:
+            logger.error(f"Error randomizing stats for {self.hero_name}, user {self.user.id}: {str(e)}")
+            raise
+
+
 
     def level_up(self):
         '''
         Увеличивает уровень героя и эволюционирует статы (+10% каждые 10 уровней). 
-        Вызывается из progress после волны, уведомление по почте.
         '''
-        self.level += 1  
-        if self.level % 10 == 0:  
-            self.stats = {k: round(v * 1.1) for k, v in self.stats.items()} 
-            send_mail_notification.delay(self.user.id, f"Reached level {self.level} on {self.hero_name} — +5 souls reward")
-        self.save(update_fields=['level', 'stats']) 
+        try:
+            logger.info(f"Starting level up for character {self.id} ({self.hero_name}), current level: {self.level}")
+            
+            old_level = self.level
+            new_level = old_level + 1
+            
+            if new_level % 10 == 0:  
+                evolved_stats = {}
+                
+                for stat, value in self.stats.items():
+                    if isinstance(value, int):
+                        new_value = round(value * 1.1)
+                        
+                        evolved_stats[stat] = max(value + 1, new_value)
+                    else:
+                        new_value = round(value * 1.1, 2)
+                    
+                        evolved_stats[stat] = max(value + 0.1, new_value) if value > 0 else 0.1
+                
+                self.stats = evolved_stats
+                logger.info(f"Character {self.id} evolved at level {new_level}")
+                
+                send_mail_notification.delay(self.user.id, f"Reached level {new_level} on {self.hero_name} — +5 souls reward")
+            
+            self.level = new_level
+            self.save(update_fields=['level', 'stats'])
+            logger.info(f"Character {self.id} leveled up from {old_level} to {self.level}")
+            
+        except Exception as e:
+            logger.error(f"Error during level up for character {self.id}: {str(e)}")
+            raise
 
     def save(self, *args, **kwargs):
-        if not self.pk: 
-            race = self.get_race()
-            self.race_bonus = self.RACE_BONUSES.get(race, {})
-            self.randomize_base_stats()
-        super().save(*args, **kwargs)
+        try:
+            is_new = not self.pk
+            logger.debug(f"Saving character {self.id if not is_new else 'new'}, hero: {self.hero_name}, user: {self.user.id if self.user else 'None'}")
+            
+            if is_new:
+                logger.info(f"Creating new character: {self.hero_name}")
+                race = self.get_race()
+                self.race_bonus = self.RACE_BONUSES.get(race, {})
+                logger.info(f"Assigned race bonus for {self.hero_name}: {self.race_bonus}")
+                self.randomize_base_stats()
+            
+            super().save(*args, **kwargs)
+            logger.info(f"Character {self.id} saved successfully")
+            
+        except Exception as e:
+            logger.error(f"Error saving character {self.hero_name}: {str(e)}")
+            raise
 
     def get_race(self):
         '''
         Возвращает расу героя по имени для авто-бонусов. Hardcode dict для скорости.
         '''
-        hero_to_race = {
+        try:
+            hero_to_race = {
             'Pudge': 'Undead',
             'Necrophos': 'Undead',
             'Juggernaut': 'Humans',
@@ -161,7 +230,13 @@ class Character(models.Model):
             'Riki': 'Shadow Satyrs',
             'Spirit Breaker': 'Mythical Creatures',
         }
-        return hero_to_race.get(self.hero_name, 'Unknown')
+            race = hero_to_race.get(self.hero_name, 'Unknown')
+            logger.debug(f"Determined race for {self.hero_name}: {race}")
+            return race
+            
+        except Exception as e:
+            logger.error(f"Error determining race for {self.hero_name}: {str(e)}")
+            return 'Unknown'
 
     def compute_power(self):
         '''
@@ -169,9 +244,34 @@ class Character(models.Model):
         Вызывается в сериализаторе и задачах.
         '''
         # Для рейтинга (4): level + sum(item levels * rarity) + soul.level if soul
-        power = self.level
-        for item in self.items.all():
-            power += item.level * item.rarity_multiplier
-        if self.soul:
-            power += self.soul.level
-        return power
+        try:
+            logger.debug(f"Computing power for character {self.id}")
+            
+            power = self.level
+            logger.debug(f"Base power from level: {power}")
+            
+            items_power = 0
+            for item in self.items.all():
+                item_power = item.level * item.rarity_multiplier
+                items_power += item_power
+                logger.debug(f"Item {item.id} added {item_power} power")
+            
+            power += items_power
+            logger.debug(f"Power after items: {power}")
+            
+            if self.soul:
+                soul_power = self.soul.level
+                power += soul_power
+                logger.debug(f"Soul added {soul_power} power, total: {power}")
+            else:
+                logger.debug("No soul equipped")
+            
+            logger.info(f"Final power for character {self.id}: {power}")
+            return power
+            
+        except Exception as e:
+            logger.error(f"Error computing power for character {self.id}: {str(e)}")
+            return 0
+        
+    def __str__(self):
+        return f"{self.hero_name} (Lvl {self.level}) - {self.user.username}"

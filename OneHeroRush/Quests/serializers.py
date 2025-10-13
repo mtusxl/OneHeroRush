@@ -13,8 +13,13 @@ class QuestSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'type', 'conditions', 'reward_diamonds', 'reward_souls', 'reward_gold', 'reward_keys']
 
     def get_is_completed(self, obj):
-        user = self.context.get('request').user
-        return user in obj.users_completed.all()
+        try:
+            user = self.context.get('request').user
+            if user.is_authenticated:
+                return obj.users_completed.filter(id=user.id).exists()
+            return False
+        except Exception as e:
+            return False
 
 class CompleteQuestSerializer(serializers.Serializer):
     '''

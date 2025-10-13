@@ -13,4 +13,4 @@ class UpdateProgressSerializer(serializers.Serializer):
     '''
     Для POST update: подтверждение волны (или босса).
     '''
-    wave_completed = serializers.BooleanField(default=True)  # Для простоты
+    wave_completed = serializers.BooleanField(default=True)  
