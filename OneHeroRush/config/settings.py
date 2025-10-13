@@ -13,16 +13,20 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 from celery.schedules import crontab
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
-
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("SECRET_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    print(f"BASE_DIR - {BASE_DIR}")
+    raise ValueError("SECRET_KEY не найден! Укажи его в .env.")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -94,19 +98,19 @@ REDIS_DB_CHANNELS = 2  # DB 2 для Channels (WS чат/почта notification
 # Cache backend: RedisCache с pool для 10k+ conn, decode_responses=True для strings (JSONB stats in characters/items randomized vampirism/crit/evasion x rarity 0.5-3.1)
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'BACKEND': 'django_redis.cache.RedisCache',  # Используем django_redis вместо django.core.cache
         'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB_CACHE}',
         'OPTIONS': {
-            'PASSWORD': REDIS_PASSWORD,
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',  # django-redis 5.4+ для sentinel support
-            'CONNECTION_POOL_KWARGS': {'max_connections': 100, 'retry_on_timeout': True},  # Pool для perf, retry для resilience
-            'SOCKET_TIMEOUT': 5,  # Sec, prevent hangs on high load (spike перед рулеткой/кейсами за 6-12 souls/keys/diamonds)
+            'PASSWORD': REDIS_PASSWORD,  # Исправлено на PASSWORD
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {'max_connections': 100, 'retry_on_timeout': True},
+            'SOCKET_TIMEOUT': 5,
             'SOCKET_CONNECT_TIMEOUT': 5,
-            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',  # Compress для bandwidth save on large serializers (e.g. souls open/hidden stats JSONB для баланса патчей)
-            'IGNORE_EXCEPTIONS': True,  # Graceful fallback to no-cache on Redis down, log via sentry
+            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+            'IGNORE_EXCEPTIONS': True,
         },
-        'KEY_PREFIX': 'oneherorush_cache',  # Namespace для multi-tenant if needed
-        'TIMEOUT': 300,  # Default ttl=5min для dynamic data (e.g. progress act/wave/location, offline-farm Celery calc +gold/keys с bonus online > offline)
+        'KEY_PREFIX': 'oneherorush_cache',
+        'TIMEOUT': 300,
     },
 }
 
@@ -129,7 +133,15 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels_redis.core.RedisChannelLayer",
+#         "CONFIG": {
+#             "hosts": [(REDIS_HOST, REDIS_PORT)],
+#             "password": REDIS_PASSWORD,
+#         },
+#     },
+# }
 
 TEMPLATES = [
     {
@@ -145,6 +157,225 @@ TEMPLATES = [
         },
     },
 ]
+
+
+
+
+
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name} {funcName}:{lineno} - {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+        'characters_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/characters.log', 
+            'formatter': 'verbose',
+        },
+        'chats_file': {
+            'level': 'INFO', 
+            'class': 'logging.FileHandler',
+            'filename': 'logs/chats.log',
+            'formatter': 'verbose',
+        },
+        'clans_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler', 
+            'filename': 'logs/clans.log',
+            'formatter': 'verbose',
+        },
+        'inventory_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/inventory.log',
+            'formatter': 'verbose',
+        },
+        'leaderboard_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/leaderboard.log',
+            'formatter': 'verbose',
+        },
+        'messages_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/messages.log',
+            'formatter': 'verbose',
+        },
+        'mail_system_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/mail_system.log',
+            'formatter': 'verbose',
+        },
+        'users_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/users.log',
+            'formatter': 'verbose',
+        },
+
+        'pets_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/pets.log',
+            'formatter': 'verbose',
+        },
+        'quests_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/quests.log',
+            'formatter': 'verbose',
+        },
+        
+        'progress_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/progress.log',
+            'formatter': 'verbose',
+        },
+        'soul_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/soul.log',
+            'formatter': 'verbose',
+        },
+        'common_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/common.log',
+            'formatter': 'verbose',
+        },
+        'celery_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/celery.log',
+            'formatter': 'verbose',
+        },
+        'django_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/django.log',
+            'formatter': 'verbose',
+        },
+    },
+    
+    'loggers': {
+        # Кастомные приложения
+        'characters': {
+            'handlers': ['console', 'characters_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'chats': {
+            'handlers': ['console', 'chats_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'clans': {
+            'handlers': ['console', 'clans_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'inventory': {
+            'handlers': ['console', 'inventory_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'leaderboard': {
+            'handlers': ['console', 'leaderboard_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'messages': {
+            'handlers': ['console', 'messages_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'mail_system': {
+            'handlers': ['console', 'mail_system_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'pets': {
+            'handlers': ['console', 'pets_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'quests': {
+            'handlers': ['console', 'quests_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'users': {
+            'handlers': ['console', 'users_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'progress': {
+            'handlers': ['console', 'progress_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'soul': {
+            'handlers': ['console', 'soul_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'common': {
+            'handlers': ['console', 'common_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        
+        # Системные логгеры
+        'celery': {
+            'handlers': ['console', 'celery_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django': {
+            'handlers': ['console', 'django_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console', 'django_file'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.db.backends': {
+            'handlers': ['console', 'django_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        
+        # Корневой логгер (ловит все необработанные логи)
+        '': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+        },
+    },
+}
+
 
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
@@ -186,7 +417,20 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+
+# Добавьте эти настройки:
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # Для сбора статики в продакшене
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',  # Дополнительные папки со статикой
+]
+
+
+if DEBUG:
+    
+    # Middleware для статики
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
